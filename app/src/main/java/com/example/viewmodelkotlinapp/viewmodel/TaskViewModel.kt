@@ -22,6 +22,15 @@ class TaskViewModel : ViewModel() {
         updateDisplayedTasks()
     }
 
+    fun updateTask(updatedTask: Task) {
+        _uiState.update { currentState ->
+            val newTasks = currentState.tasks.map { task ->
+                if (task.id == updatedTask.id) updatedTask else task
+            }
+            currentState.copy(tasks = newTasks)
+        }
+    }
+
     fun toggleDone(taskId: Int) {
         allTasks = allTasks.map { task ->
             if (task.id == taskId) {
