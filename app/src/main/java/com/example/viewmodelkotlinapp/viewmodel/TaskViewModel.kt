@@ -9,56 +9,75 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
 class TaskViewModel : ViewModel() {
-    private val _uiState = MutableStateFlow(TaskUiState(tasks = TaskDataSource.getInitialTasks()))
 
+    private var allTasks = TaskDataSource.getInitialTasks()
+
+    private val _uiState = MutableStateFlow(
+        TaskUiState(tasks = allTasks)
+    )
     val uiState: StateFlow<TaskUiState> = _uiState.asStateFlow()
 
-    private val allTasks = TaskDataSource.getInitialTasks().toMutableList()
-
-    // Add a new task to the list
     fun addTask(task: Task) {
-        allTasks.add(task)
+        allTasks = allTasks + task  // Create new list instance
         updateDisplayedTasks()
     }
 
-    //Toggle the done status of a task by ID
     fun toggleDone(taskId: Int) {
-        val index = allTasks.indexOfFirst { it.id == taskId }
-        if (index != -1) {
-            allTasks[index] = allTasks[index].copy(done = !allTasks[index].done)
-            updateDisplayedTasks()
-        }
-    }
-
-
-    // Sort tasks by due date (earliest first)
-
-    fun sortByDueDate() {
-        val sorted = allTasks.sortedBy { task ->
-            // Convert DD-MM-YYYY to YYYY-MM-DD for proper sorting
-            val parts = task.dueDate.split("-")
-            if (parts.size == 3) {
-                "${parts[2]}-${parts[1]}-${parts[0]}"
+        allTasks = allTasks.map { task ->
+            if (task.id == taskId) {
+                task.copy(done = !task.done)
             } else {
-                task.dueDate
+                task
             }
         }
-        allTasks.clear()
-        allTasks.addAll(sorted)
         updateDisplayedTasks()
+    }
+
+    fun toggleSortByDate() {
+        _uiState.update { currentState ->
+            val newOrder =
+                if (currentState.sortOrder == SortOrder.ASCENDING)
+                    SortOrder.DESCENDING
+                else
+                    SortOrder.ASCENDING
+
+            val sorted = sortTasksByDate(allTasks, newOrder)
+            allTasks = sorted
+
+            currentState.copy(
+                sortOrder = newOrder,
+                tasks = if (currentState.filterActive) {
+                    filterTasks(sorted, currentState.showCompleted)
+                } else {
+                    sorted
+                }
+            )
+        }
+    }
+
+    private fun sortTasksByDate(tasks: List<Task>, order: SortOrder): List<Task> {
+        val sorted = tasks.sortedBy { task ->
+            // Convert DD-MM-YYYY to YYYY-MM-DD for proper sorting
+            val parts = task.dueDate.split("-")
+            if (parts.size == 3)
+                "${parts[2]}-${parts[1]}-${parts[0]}"
+            else task.dueDate
+        }
+
+        return if (order == SortOrder.DESCENDING) sorted.reversed() else sorted
     }
 
 
     // Toggle filter on/off
     fun toggleFilter() {
         _uiState.update { currentState ->
-            val newFilterActive = !currentState.filterActive
+            val active = !currentState.filterActive
             currentState.copy(
-                filterActive = newFilterActive,
-                tasks = if (newFilterActive) {
-                    filterTasks(currentState.showCompleted)
+                filterActive = active,
+                tasks = if (active) {
+                    filterTasks(allTasks, currentState.showCompleted)
                 } else {
-                    allTasks.toList()
+                    allTasks
                 }
             )
         }
@@ -72,7 +91,7 @@ class TaskViewModel : ViewModel() {
             currentState.copy(
                 showCompleted = newShowCompleted,
                 tasks = if (currentState.filterActive) {
-                    filterTasks(newShowCompleted)
+                    filterTasks(allTasks, newShowCompleted)
                 } else {
                     currentState.tasks
                 }
@@ -81,8 +100,13 @@ class TaskViewModel : ViewModel() {
     }
 
     // Helper function to filter tasks by completion status
-    private fun filterTasks(showCompleted: Boolean): List<Task> {
-        return allTasks.filter { it.done == showCompleted }
+    private fun filterTasks(tasks: List<Task>, showCompleted: Boolean): List<Task> =
+        tasks.filter { it.done == showCompleted }
+
+    fun toggleActions() {
+        _uiState.update {
+            it.copy(actionsExpanded = !it.actionsExpanded)
+        }
     }
 
 
@@ -91,9 +115,9 @@ class TaskViewModel : ViewModel() {
         _uiState.update { currentState ->
             currentState.copy(
                 tasks = if (currentState.filterActive) {
-                    filterTasks(currentState.showCompleted)
+                    filterTasks(allTasks, currentState.showCompleted)
                 } else {
-                    allTasks.toList()
+                    allTasks
                 }
             )
         }
