@@ -152,7 +152,8 @@ fun HomeScreen(
                     AnimatedTaskCard(
                         task = task,
                         onToggleDone = { viewModel.toggleDone(task.id) },
-                        onUpdateTask = { updatedTask -> viewModel.updateTask(updatedTask) }
+                        onUpdateTask = { updatedTask -> viewModel.updateTask(updatedTask) },
+                        onDeleteTask = { viewModel.deleteTask(it) }
                     )
                 }
 
@@ -253,12 +254,13 @@ fun HomeScreen(
     }
 }
 
-// Animated Task Card with edit functionality
+// Animated Task Card with edit + delete
 @Composable
 fun AnimatedTaskCard(
     task: Task,
     onToggleDone: () -> Unit,
-    onUpdateTask: (Task) -> Unit
+    onUpdateTask: (Task) -> Unit,
+    onDeleteTask: (Task) -> Unit
 ) {
     val scope = rememberCoroutineScope()
     var pressed by remember { mutableStateOf(false) }
@@ -360,10 +362,25 @@ fun AnimatedTaskCard(
                         horizontalArrangement = Arrangement.End,
                         modifier = Modifier.fillMaxWidth()
                     ) {
+                        // Cancel
                         TextButton(onClick = { editing = false }) {
                             Text("Cancel")
                         }
+
                         Spacer(Modifier.width(8.dp))
+
+                        // Delete
+                        OutlinedButton(
+                            onClick = { onDeleteTask(task); editing = false }
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete Task")
+                            Spacer(Modifier.width(4.dp))
+                            Text("Delete")
+                        }
+
+                        Spacer(Modifier.width(8.dp))
+
+                        // Save
                         FilledTonalButton(
                             onClick = {
                                 val updatedTask = task.copy(

@@ -31,6 +31,12 @@ class TaskViewModel : ViewModel() {
         }
     }
 
+    fun deleteTask(task: Task) {
+        _uiState.update { currentState ->
+            currentState.copy(tasks = currentState.tasks.filter { it.id != task.id })
+        }
+    }
+
     fun toggleDone(taskId: Int) {
         allTasks = allTasks.map { task ->
             if (task.id == taskId) {
