@@ -29,7 +29,7 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    // State for inline add task panel
+    // Inline Add Task state
     var addingTask by remember { mutableStateOf(false) }
     var newTaskTitle by remember { mutableStateOf("") }
     var newTaskDescription by remember { mutableStateOf("") }
@@ -147,22 +147,22 @@ fun HomeScreen(
                 contentPadding = PaddingValues(bottom = 16.dp)
             ) {
 
-                // Render all tasks first
+                // Render all tasks
                 items(uiState.tasks, key = { it.id }) { task ->
                     AnimatedTaskCard(
                         task = task,
-                        onToggleDone = { viewModel.toggleDone(task.id) }
+                        onToggleDone = { viewModel.toggleDone(task.id) },
+                        onUpdateTask = { updatedTask -> viewModel.updateTask(updatedTask) }
                     )
                 }
 
-                // Inline Add Task row as the last item
+                // Inline Add Task row
                 item {
                     AnimatedVisibility(
                         visible = addingTask,
                         enter = expandVertically() + fadeIn(),
                         exit = shrinkVertically() + fadeOut()
                     ) {
-                        // Expanded panel
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -185,14 +185,12 @@ fun HomeScreen(
                                     singleLine = true,
                                     modifier = Modifier.fillMaxWidth()
                                 )
-
                                 OutlinedTextField(
                                     value = newTaskDescription,
                                     onValueChange = { newTaskDescription = it },
                                     placeholder = { Text("Task description") },
                                     modifier = Modifier.fillMaxWidth()
                                 )
-
                                 OutlinedTextField(
                                     value = newTaskDueDate,
                                     onValueChange = { newTaskDueDate = it },
@@ -201,44 +199,43 @@ fun HomeScreen(
                                     modifier = Modifier.fillMaxWidth()
                                 )
 
-                                FilledTonalButton(
-                                    onClick = {
-                                        if (newTaskTitle.isNotBlank()) {
-                                            val newTask = Task(
-                                                id = uiState.tasks.maxOfOrNull { it.id }?.plus(1)
-                                                    ?: 1,
-                                                title = newTaskTitle,
-                                                description = newTaskDescription,
-                                                dueDate = if (newTaskDueDate.isBlank()) "15-01-2026" else newTaskDueDate,
-                                                priority = 1,
-                                                done = false
-                                            )
-                                            viewModel.addTask(newTask)
-                                            newTaskTitle = ""
-                                            newTaskDescription = ""
-                                            newTaskDueDate = ""
-                                            addingTask = false
-                                        }
-                                    },
+                                Row(
+                                    horizontalArrangement = Arrangement.End,
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Icon(Icons.Default.Add, contentDescription = null)
+                                    TextButton(onClick = { addingTask = false }) {
+                                        Text("Cancel")
+                                    }
                                     Spacer(Modifier.width(8.dp))
-                                    Text("Add Task")
-                                }
-
-                                TextButton(
-                                    onClick = { addingTask = false },
-                                    modifier = Modifier.align(Alignment.End)
-                                ) {
-                                    Text("Cancel")
+                                    FilledTonalButton(
+                                        onClick = {
+                                            if (newTaskTitle.isNotBlank()) {
+                                                val task = Task(
+                                                    id = uiState.tasks.maxOfOrNull { it.id }?.plus(1) ?: 1,
+                                                    title = newTaskTitle,
+                                                    description = newTaskDescription,
+                                                    dueDate = if (newTaskDueDate.isBlank()) "15-01-2026" else newTaskDueDate,
+                                                    priority = 1,
+                                                    done = false
+                                                )
+                                                viewModel.addTask(task)
+                                                newTaskTitle = ""
+                                                newTaskDescription = ""
+                                                newTaskDueDate = ""
+                                                addingTask = false
+                                            }
+                                        }
+                                    ) {
+                                        Icon(Icons.Default.Add, contentDescription = null)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("Add Task")
+                                    }
                                 }
                             }
                         }
                     }
 
                     if (!addingTask) {
-                        // Collapsed add task row
                         FilledTonalButton(
                             onClick = { addingTask = true },
                             modifier = Modifier
@@ -256,14 +253,21 @@ fun HomeScreen(
     }
 }
 
-// Animated Task Card
+// Animated Task Card with edit functionality
 @Composable
 fun AnimatedTaskCard(
     task: Task,
-    onToggleDone: () -> Unit
+    onToggleDone: () -> Unit,
+    onUpdateTask: (Task) -> Unit
 ) {
     val scope = rememberCoroutineScope()
     var pressed by remember { mutableStateOf(false) }
+
+    // Edit state
+    var editing by remember { mutableStateOf(false) }
+    var editTitle by remember { mutableStateOf(task.title) }
+    var editDescription by remember { mutableStateOf(task.description) }
+    var editDueDate by remember { mutableStateOf(task.dueDate) }
 
     val scale by animateFloatAsState(targetValue = if (pressed) 0.9f else 1f, label = "scale")
 
@@ -273,35 +277,108 @@ fun AnimatedTaskCard(
             .scale(scale),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(task.title, style = MaterialTheme.typography.titleMedium)
-                Text(task.description, style = MaterialTheme.typography.bodyMedium)
-                Text("Due ${task.dueDate}", style = MaterialTheme.typography.labelMedium)
-            }
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // Top row: task info + Done + Edit
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(task.title, style = MaterialTheme.typography.titleMedium)
+                    Text(task.description, style = MaterialTheme.typography.bodyMedium)
+                    Text("Due ${task.dueDate}", style = MaterialTheme.typography.labelMedium)
+                }
 
-            FilledTonalButton(
-                onClick = {
-                    pressed = true
-                    onToggleDone()
-                    scope.launch {
-                        delay(100)
-                        pressed = false
+                Row {
+                    FilledTonalButton(
+                        onClick = {
+                            pressed = true
+                            onToggleDone()
+                            scope.launch {
+                                delay(100)
+                                pressed = false
+                            }
+                        }
+                    ) {
+                        Icon(
+                            imageVector = if (task.done) Icons.Default.Check else Icons.Default.Close,
+                            contentDescription = null
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(if (task.done) "Done" else "Not done")
+                    }
+
+                    Spacer(Modifier.width(8.dp))
+
+                    FilledTonalButton(
+                        onClick = { editing = !editing }
+                    ) {
+                        Icon(Icons.Default.Edit, contentDescription = "Edit task")
+                        Spacer(Modifier.width(4.dp))
+                        Text(if (editing) "Cancel" else "Edit")
                     }
                 }
+            }
+
+            // Edit panel
+            AnimatedVisibility(
+                visible = editing,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
             ) {
-                Icon(
-                    imageVector = if (task.done) Icons.Default.Check else Icons.Default.Close,
-                    contentDescription = null
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(if (task.done) "Done" else "Not done")
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedTextField(
+                        value = editTitle,
+                        onValueChange = { editTitle = it },
+                        label = { Text("Task Title") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = editDescription,
+                        onValueChange = { editDescription = it },
+                        label = { Text("Task Description") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = editDueDate,
+                        onValueChange = { editDueDate = it },
+                        label = { Text("Due Date (DD-MM-YYYY)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Row(
+                        horizontalArrangement = Arrangement.End,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        TextButton(onClick = { editing = false }) {
+                            Text("Cancel")
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        FilledTonalButton(
+                            onClick = {
+                                val updatedTask = task.copy(
+                                    title = editTitle,
+                                    description = editDescription,
+                                    dueDate = editDueDate
+                                )
+                                onUpdateTask(updatedTask)
+                                editing = false
+                            }
+                        ) {
+                            Text("Save")
+                        }
+                    }
+                }
             }
         }
     }
