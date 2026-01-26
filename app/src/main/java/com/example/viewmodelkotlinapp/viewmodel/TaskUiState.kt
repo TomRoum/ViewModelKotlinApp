@@ -4,10 +4,8 @@ import com.example.viewmodelkotlinapp.domain.Task
 import com.example.viewmodelkotlinapp.domain.filters.TaskFilter
 import com.example.viewmodelkotlinapp.domain.filters.TaskSorter
 
-/**
- * Improved UI State with better separation of concerns
- * All state transformations are explicit
- */
+// Improved UI State with better separation of concerns
+// All state transformations are explicit
 data class TaskUiState(
     val tasks: List<Task> = emptyList(),
     val filter: TaskFilter = TaskFilter.ShowAll,
@@ -18,9 +16,6 @@ data class TaskUiState(
 ) {
     val isFilterActive: Boolean
         get() = filter !is TaskFilter.ShowAll
-
-    val isShowingCompleted: Boolean
-        get() = filter is TaskFilter.ShowCompleted
 
     val sortOrderDisplayText: String
         get() = when (sorter) {
