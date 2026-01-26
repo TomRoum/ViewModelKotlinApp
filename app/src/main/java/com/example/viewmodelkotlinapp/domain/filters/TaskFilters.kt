@@ -2,9 +2,7 @@ package com.example.viewmodelkotlinapp.domain.filters
 
 import com.example.viewmodelkotlinapp.domain.Task
 
-/**
- * Strategy Pattern: Pluggable filtering strategies
- */
+// Pluggable filtering strategies
 sealed interface TaskFilter {
     fun apply(tasks: List<Task>): List<Task>
 
@@ -23,9 +21,6 @@ sealed interface TaskFilter {
     }
 }
 
-/**
- * Strategy Pattern: Pluggable sorting strategies
- */
 sealed interface TaskSorter {
     fun sort(tasks: List<Task>): List<Task>
 
@@ -50,9 +45,7 @@ sealed interface TaskSorter {
     }
 }
 
-/**
- * Converts DD-MM-YYYY to YYYY-MM-DD for proper sorting
- */
+ // Converts DD-MM-YYYY to YYYY-MM-DD for  sorting
 private fun String.toSortableDate(): String {
     val parts = split("-")
     return if (parts.size == 3) {
