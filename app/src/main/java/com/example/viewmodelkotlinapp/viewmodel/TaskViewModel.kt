@@ -6,16 +6,11 @@ import com.example.viewmodelkotlinapp.domain.Task
 import com.example.viewmodelkotlinapp.domain.filters.TaskFilter
 import com.example.viewmodelkotlinapp.domain.filters.TaskSorter
 import com.example.viewmodelkotlinapp.domain.usecases.*
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
-/**
- * Refactored ViewModel using:
- * - Dependency Injection for testability
- * - Use Cases for business logic separation
- * - Single source of truth (no duplicate state)
- * - Proper error handling
- */
+@OptIn(ExperimentalCoroutinesApi::class)
 class TaskViewModel(
     private val getFilteredAndSortedTasks: GetFilteredAndSortedTasksUseCase,
     private val addTask: AddTaskUseCase,
@@ -31,9 +26,21 @@ class TaskViewModel(
     private val _actionsExpanded = MutableStateFlow(false)
     private val _error = MutableStateFlow<String?>(null)
 
-    // Derived state from repository + UI controls
+    private val filteredTasks: Flow<List<Task>> = combine(
+        _filter,
+        _sorter
+    ) { filter, sorter ->
+        filter to sorter
+    }.flatMapLatest { (filter, sorter) ->
+        getFilteredAndSortedTasks(filter, sorter)
+    }.catch { e ->
+        _error.value = "Failed to load tasks: ${e.message}"
+        emit(emptyList())
+    }
+
+    // Derived UI state combining all sources
     val uiState: StateFlow<TaskUiState> = combine(
-        getFilteredAndSortedTasks(_filter.value, _sorter.value),
+        filteredTasks,
         _filter,
         _sorter,
         _actionsExpanded,
@@ -51,19 +58,6 @@ class TaskViewModel(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = TaskUiState()
     )
-
-    // Re-fetch tasks when filter or sorter changes
-    init {
-        viewModelScope.launch {
-            combine(_filter, _sorter) { filter, sorter ->
-                Pair(filter, sorter)
-            }.collectLatest { (filter, sorter) ->
-                getFilteredAndSortedTasks(filter, sorter)
-                    .catch { e -> _error.value = e.message }
-                    .collect()
-            }
-        }
-    }
 
     fun onAddTask(task: Task) {
         viewModelScope.launch {
@@ -136,10 +130,6 @@ class TaskViewModel(
 
     fun onShowIncompleteTasks() {
         _filter.value = TaskFilter.ShowIncomplete
-    }
-
-    fun onShowAllTasks() {
-        _filter.value = TaskFilter.ShowAll
     }
 
     fun onToggleActionsPanel() {
