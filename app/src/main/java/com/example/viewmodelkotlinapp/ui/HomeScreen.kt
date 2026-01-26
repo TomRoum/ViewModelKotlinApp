@@ -24,7 +24,6 @@ import com.example.viewmodelkotlinapp.domain.Task
 import com.example.viewmodelkotlinapp.domain.filters.TaskFilter
 import com.example.viewmodelkotlinapp.domain.filters.TaskSorter
 import com.example.viewmodelkotlinapp.viewmodel.TaskViewModel
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
@@ -33,7 +32,6 @@ fun HomeScreen(
     viewModel: TaskViewModel = viewModel(factory = TaskViewModelFactory())
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val scope = rememberCoroutineScope()
 
     // Inline Add Task state
     var addingTask by remember { mutableStateOf(false) }
@@ -260,22 +258,21 @@ fun HomeScreen(
                                     FilledTonalButton(
                                         onClick = {
                                             if (newTaskTitle.isNotBlank()) {
-                                                scope.launch {
-                                                    val newId = viewModel.getNextTaskId()
-                                                    val task = Task(
-                                                        id = newId,
-                                                        title = newTaskTitle,
-                                                        description = newTaskDescription,
-                                                        dueDate = newTaskDueDate.ifBlank { "15-01-2026" },
-                                                        priority = 1,
-                                                        done = false
-                                                    )
-                                                    viewModel.onAddTask(task)
-                                                    newTaskTitle = ""
-                                                    newTaskDescription = ""
-                                                    newTaskDueDate = ""
-                                                    addingTask = false
-                                                }
+                                                // Use a non-suspending approach
+                                                val newId = (uiState.tasks.maxOfOrNull { it.id } ?: 0) + 1
+                                                val task = Task(
+                                                    id = newId,
+                                                    title = newTaskTitle,
+                                                    description = newTaskDescription,
+                                                    dueDate = newTaskDueDate.ifBlank { "15-01-2026" },
+                                                    priority = 1,
+                                                    done = false
+                                                )
+                                                viewModel.onAddTask(task)
+                                                newTaskTitle = ""
+                                                newTaskDescription = ""
+                                                newTaskDueDate = ""
+                                                addingTask = false
                                             }
                                         }
                                     ) {
@@ -314,8 +311,6 @@ fun AnimatedTaskCard(
     onUpdateTask: (Task) -> Unit,
     onDeleteTask: () -> Unit
 ) {
-    val scope = rememberCoroutineScope()
-
     // Edit state
     var editing by remember { mutableStateOf(false) }
     var editTitle by remember(task.title) { mutableStateOf(task.title) }
