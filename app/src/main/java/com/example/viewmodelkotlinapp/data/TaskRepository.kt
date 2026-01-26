@@ -6,10 +6,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
-/**
- * Repository Pattern: Abstracts data source access
- * Single source of truth for task data
- */
+// Repository Pattern: Abstracts data source access
+// Single source of truth for task data
 interface TaskRepository {
     fun getAllTasks(): Flow<List<Task>>
     suspend fun addTask(task: Task)
@@ -18,10 +16,8 @@ interface TaskRepository {
     suspend fun toggleTaskCompletion(taskId: Int)
 }
 
-/**
- * In-memory implementation of TaskRepository
- * Can be easily swapped with Room/Remote implementation
- */
+// In-memory implementation of TaskRepository
+// Can be easily swapped with Room/Remote implementation
 class InMemoryTaskRepository(
     initialTasks: List<Task>
 ) : TaskRepository {
