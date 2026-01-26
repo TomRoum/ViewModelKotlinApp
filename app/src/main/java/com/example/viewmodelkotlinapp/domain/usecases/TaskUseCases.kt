@@ -7,11 +7,7 @@ import com.example.viewmodelkotlinapp.domain.filters.TaskSorter
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-/**
- * Use Case Pattern: Encapsulates business logic
- * Each use case has a single responsibility
- */
-
+ // Each use case has a single responsibility
 class GetFilteredAndSortedTasksUseCase(
     private val repository: TaskRepository
 ) {
