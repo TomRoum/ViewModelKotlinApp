@@ -1,33 +1,39 @@
 package com.example.viewmodelkotlinapp.ui
 
 import androidx.compose.animation.*
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.viewmodelkotlinapp.di.TaskViewModelFactory
 import com.example.viewmodelkotlinapp.domain.Task
-import com.example.viewmodelkotlinapp.viewmodel.SortOrder
+import com.example.viewmodelkotlinapp.domain.filters.TaskFilter
+import com.example.viewmodelkotlinapp.domain.filters.TaskSorter
 import com.example.viewmodelkotlinapp.viewmodel.TaskViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
 fun HomeScreen(
     modifier: Modifier = Modifier,
-    viewModel: TaskViewModel = viewModel()
+    viewModel: TaskViewModel = viewModel(factory = TaskViewModelFactory())
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val scope = rememberCoroutineScope()
 
     // Inline Add Task state
     var addingTask by remember { mutableStateOf(false) }
@@ -35,9 +41,25 @@ fun HomeScreen(
     var newTaskDescription by remember { mutableStateOf("") }
     var newTaskDueDate by remember { mutableStateOf("") }
 
+    // Show error snackbar
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(uiState.error) {
+        uiState.error?.let { error ->
+            snackbarHostState.showSnackbar(
+                message = error,
+                duration = SnackbarDuration.Short
+            )
+            viewModel.onDismissError()
+        }
+    }
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        topBar = { TopAppBar(title = { Text("Task Manager") }) }
+        topBar = {
+            TopAppBar(title = { Text("Task Manager") })
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
 
         Column(
@@ -54,7 +76,7 @@ fun HomeScreen(
                 exit = fadeOut() + shrinkVertically()
             ) {
                 ExtendedFloatingActionButton(
-                    onClick = { viewModel.toggleActions() },
+                    onClick = { viewModel.onToggleActionsPanel() },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 8.dp)
@@ -88,7 +110,7 @@ fun HomeScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text("Actions", style = MaterialTheme.typography.titleMedium)
-                            IconButton(onClick = { viewModel.toggleActions() }) {
+                            IconButton(onClick = { viewModel.onToggleActionsPanel() }) {
                                 Icon(
                                     Icons.Default.KeyboardArrowUp,
                                     contentDescription = "Collapse actions"
@@ -98,42 +120,59 @@ fun HomeScreen(
 
                         // Sort toggle
                         FilledTonalButton(
-                            onClick = { viewModel.toggleSortByDate() },
+                            onClick = { viewModel.onToggleSortOrder() },
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Icon(
-                                imageVector = if (uiState.sortOrder == SortOrder.ASCENDING)
-                                    Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                imageVector = when (uiState.sorter) {
+                                    is TaskSorter.ByDateAscending -> Icons.Default.KeyboardArrowUp
+                                    is TaskSorter.ByDateDescending -> Icons.Default.KeyboardArrowDown
+                                    else -> Icons.Default.KeyboardArrowUp
+                                },
                                 contentDescription = null
                             )
                             Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = if (uiState.sortOrder == SortOrder.ASCENDING)
-                                    "Sort: Oldest first" else "Sort: Newest first"
-                            )
+                            Text(uiState.sortOrderDisplayText)
                         }
 
                         // Filter toggle
                         FilledTonalButton(
-                            onClick = { viewModel.toggleFilter() },
+                            onClick = { viewModel.onToggleFilter() },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(if (uiState.filterActive) "Filter: ON" else "Filter: OFF")
+                            val filterText = when (uiState.filter) {
+                                is TaskFilter.ShowAll -> "Filter: All Tasks"
+                                is TaskFilter.ShowCompleted -> "Filter: Completed"
+                                is TaskFilter.ShowIncomplete -> "Filter: Incomplete"
+                            }
+                            Text(filterText)
                         }
 
-                        // Filter options
-                        AnimatedVisibility(visible = uiState.filterActive) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                FilterChip(
-                                    selected = uiState.showCompleted,
-                                    onClick = { if (!uiState.showCompleted) viewModel.toggleShowCompleted() },
-                                    label = { Text("Completed") }
+                        // Filter options (radio buttons style)
+                        AnimatedVisibility(visible = uiState.isFilterActive) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(
+                                    "Show:",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                FilterChip(
-                                    selected = !uiState.showCompleted,
-                                    onClick = { if (uiState.showCompleted) viewModel.toggleShowCompleted() },
-                                    label = { Text("Incomplete") }
-                                )
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    FilterChip(
+                                        selected = uiState.filter is TaskFilter.ShowCompleted,
+                                        onClick = { viewModel.onShowCompletedTasks() },
+                                        label = { Text("Completed") },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    FilterChip(
+                                        selected = uiState.filter is TaskFilter.ShowIncomplete,
+                                        onClick = { viewModel.onShowIncompleteTasks() },
+                                        label = { Text("Incomplete") },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
                             }
                         }
                     }
@@ -148,12 +187,15 @@ fun HomeScreen(
             ) {
 
                 // Render all tasks
-                items(uiState.tasks, key = { it.id }) { task ->
+                items(
+                    items = uiState.tasks,
+                    key = { it.id }
+                ) { task ->
                     AnimatedTaskCard(
                         task = task,
-                        onToggleDone = { viewModel.toggleDone(task.id) },
-                        onUpdateTask = { updatedTask -> viewModel.updateTask(updatedTask) },
-                        onDeleteTask = { viewModel.deleteTask(it) }
+                        onToggleDone = { viewModel.onToggleTaskCompletion(task.id) },
+                        onUpdateTask = { updatedTask -> viewModel.onUpdateTask(updatedTask) },
+                        onDeleteTask = { viewModel.onDeleteTask(task.id) }
                     )
                 }
 
@@ -204,26 +246,36 @@ fun HomeScreen(
                                     horizontalArrangement = Arrangement.End,
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    TextButton(onClick = { addingTask = false }) {
+                                    TextButton(
+                                        onClick = {
+                                            addingTask = false
+                                            newTaskTitle = ""
+                                            newTaskDescription = ""
+                                            newTaskDueDate = ""
+                                        }
+                                    ) {
                                         Text("Cancel")
                                     }
                                     Spacer(Modifier.width(8.dp))
                                     FilledTonalButton(
                                         onClick = {
                                             if (newTaskTitle.isNotBlank()) {
-                                                val task = Task(
-                                                    id = uiState.tasks.maxOfOrNull { it.id }?.plus(1) ?: 1,
-                                                    title = newTaskTitle,
-                                                    description = newTaskDescription,
-                                                    dueDate = if (newTaskDueDate.isBlank()) "15-01-2026" else newTaskDueDate,
-                                                    priority = 1,
-                                                    done = false
-                                                )
-                                                viewModel.addTask(task)
-                                                newTaskTitle = ""
-                                                newTaskDescription = ""
-                                                newTaskDueDate = ""
-                                                addingTask = false
+                                                scope.launch {
+                                                    val newId = viewModel.getNextTaskId()
+                                                    val task = Task(
+                                                        id = newId,
+                                                        title = newTaskTitle,
+                                                        description = newTaskDescription,
+                                                        dueDate = newTaskDueDate.ifBlank { "15-01-2026" },
+                                                        priority = 1,
+                                                        done = false
+                                                    )
+                                                    viewModel.onAddTask(task)
+                                                    newTaskTitle = ""
+                                                    newTaskDescription = ""
+                                                    newTaskDueDate = ""
+                                                    addingTask = false
+                                                }
                                             }
                                         }
                                     ) {
@@ -260,23 +312,25 @@ fun AnimatedTaskCard(
     task: Task,
     onToggleDone: () -> Unit,
     onUpdateTask: (Task) -> Unit,
-    onDeleteTask: (Task) -> Unit
+    onDeleteTask: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
-    var pressed by remember { mutableStateOf(false) }
 
     // Edit state
     var editing by remember { mutableStateOf(false) }
-    var editTitle by remember { mutableStateOf(task.title) }
-    var editDescription by remember { mutableStateOf(task.description) }
-    var editDueDate by remember { mutableStateOf(task.dueDate) }
+    var editTitle by remember(task.title) { mutableStateOf(task.title) }
+    var editDescription by remember(task.description) { mutableStateOf(task.description) }
+    var editDueDate by remember(task.dueDate) { mutableStateOf(task.dueDate) }
 
-    val scale by animateFloatAsState(targetValue = if (pressed) 0.9f else 1f, label = "scale")
+    // Reset edit fields when task changes
+    LaunchedEffect(task) {
+        editTitle = task.title
+        editDescription = task.description
+        editDueDate = task.dueDate
+    }
 
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .scale(scale),
+        modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -289,21 +343,24 @@ fun AnimatedTaskCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text(task.title, style = MaterialTheme.typography.titleMedium)
-                    Text(task.description, style = MaterialTheme.typography.bodyMedium)
-                    Text("Due ${task.dueDate}", style = MaterialTheme.typography.labelMedium)
+                    Text(
+                        text = task.title,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        text = task.description,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        text = "Due ${task.dueDate}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
 
                 Row {
                     FilledTonalButton(
-                        onClick = {
-                            pressed = true
-                            onToggleDone()
-                            scope.launch {
-                                delay(100)
-                                pressed = false
-                            }
-                        }
+                        onClick = onToggleDone
                     ) {
                         Icon(
                             imageVector = if (task.done) Icons.Default.Check else Icons.Default.Close,
@@ -316,7 +373,15 @@ fun AnimatedTaskCard(
                     Spacer(Modifier.width(8.dp))
 
                     FilledTonalButton(
-                        onClick = { editing = !editing }
+                        onClick = {
+                            editing = !editing
+                            if (!editing) {
+                                // Reset fields when canceling
+                                editTitle = task.title
+                                editDescription = task.description
+                                editDueDate = task.dueDate
+                            }
+                        }
                     ) {
                         Icon(Icons.Default.Edit, contentDescription = "Edit task")
                         Spacer(Modifier.width(4.dp))
@@ -363,7 +428,14 @@ fun AnimatedTaskCard(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         // Cancel
-                        TextButton(onClick = { editing = false }) {
+                        TextButton(
+                            onClick = {
+                                editing = false
+                                editTitle = task.title
+                                editDescription = task.description
+                                editDueDate = task.dueDate
+                            }
+                        ) {
                             Text("Cancel")
                         }
 
@@ -371,7 +443,10 @@ fun AnimatedTaskCard(
 
                         // Delete
                         OutlinedButton(
-                            onClick = { onDeleteTask(task); editing = false }
+                            onClick = {
+                                onDeleteTask()
+                                editing = false
+                            }
                         ) {
                             Icon(Icons.Default.Delete, contentDescription = "Delete Task")
                             Spacer(Modifier.width(4.dp))

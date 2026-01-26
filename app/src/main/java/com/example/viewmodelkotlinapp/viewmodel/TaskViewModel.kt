@@ -1,140 +1,152 @@
 package com.example.viewmodelkotlinapp.viewmodel
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.example.viewmodelkotlinapp.domain.Task
-import com.example.viewmodelkotlinapp.domain.TaskDataSource
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import com.example.viewmodelkotlinapp.domain.filters.TaskFilter
+import com.example.viewmodelkotlinapp.domain.filters.TaskSorter
+import com.example.viewmodelkotlinapp.domain.usecases.*
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
 
-class TaskViewModel : ViewModel() {
+/**
+ * Refactored ViewModel using:
+ * - Dependency Injection for testability
+ * - Use Cases for business logic separation
+ * - Single source of truth (no duplicate state)
+ * - Proper error handling
+ */
+class TaskViewModel(
+    private val getFilteredAndSortedTasks: GetFilteredAndSortedTasksUseCase,
+    private val addTask: AddTaskUseCase,
+    private val updateTask: UpdateTaskUseCase,
+    private val deleteTask: DeleteTaskUseCase,
+    private val toggleTaskCompletion: ToggleTaskCompletionUseCase,
+    private val generateTaskId: GenerateTaskIdUseCase
+) : ViewModel() {
 
-    private var allTasks = TaskDataSource.getInitialTasks()
+    // UI controls (not derived from repository)
+    private val _filter = MutableStateFlow<TaskFilter>(TaskFilter.ShowAll)
+    private val _sorter = MutableStateFlow<TaskSorter>(TaskSorter.ByDateAscending)
+    private val _actionsExpanded = MutableStateFlow(false)
+    private val _error = MutableStateFlow<String?>(null)
 
-    private val _uiState = MutableStateFlow(
-        TaskUiState(tasks = allTasks)
+    // Derived state from repository + UI controls
+    val uiState: StateFlow<TaskUiState> = combine(
+        getFilteredAndSortedTasks(_filter.value, _sorter.value),
+        _filter,
+        _sorter,
+        _actionsExpanded,
+        _error
+    ) { tasks, filter, sorter, actionsExpanded, error ->
+        TaskUiState(
+            tasks = tasks,
+            filter = filter,
+            sorter = sorter,
+            actionsExpanded = actionsExpanded,
+            error = error
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = TaskUiState()
     )
-    val uiState: StateFlow<TaskUiState> = _uiState.asStateFlow()
 
-    fun addTask(task: Task) {
-        allTasks = allTasks + task  // Create new list instance
-        updateDisplayedTasks()
-    }
-
-    fun updateTask(updatedTask: Task) {
-        _uiState.update { currentState ->
-            val newTasks = currentState.tasks.map { task ->
-                if (task.id == updatedTask.id) updatedTask else task
-            }
-            currentState.copy(tasks = newTasks)
-        }
-    }
-
-    fun deleteTask(task: Task) {
-        _uiState.update { currentState ->
-            currentState.copy(tasks = currentState.tasks.filter { it.id != task.id })
-        }
-    }
-
-    fun toggleDone(taskId: Int) {
-        allTasks = allTasks.map { task ->
-            if (task.id == taskId) {
-                task.copy(done = !task.done)
-            } else {
-                task
+    // Re-fetch tasks when filter or sorter changes
+    init {
+        viewModelScope.launch {
+            combine(_filter, _sorter) { filter, sorter ->
+                Pair(filter, sorter)
+            }.collectLatest { (filter, sorter) ->
+                getFilteredAndSortedTasks(filter, sorter)
+                    .catch { e -> _error.value = e.message }
+                    .collect()
             }
         }
-        updateDisplayedTasks()
     }
 
-    fun toggleSortByDate() {
-        _uiState.update { currentState ->
-            val newOrder =
-                if (currentState.sortOrder == SortOrder.ASCENDING)
-                    SortOrder.DESCENDING
-                else
-                    SortOrder.ASCENDING
-
-            val sorted = sortTasksByDate(allTasks, newOrder)
-            allTasks = sorted
-
-            currentState.copy(
-                sortOrder = newOrder,
-                tasks = if (currentState.filterActive) {
-                    filterTasks(sorted, currentState.showCompleted)
-                } else {
-                    sorted
-                }
-            )
+    fun onAddTask(task: Task) {
+        viewModelScope.launch {
+            try {
+                addTask(task)
+            } catch (e: Exception) {
+                _error.value = "Failed to add task: ${e.message}"
+            }
         }
     }
 
-    private fun sortTasksByDate(tasks: List<Task>, order: SortOrder): List<Task> {
-        val sorted = tasks.sortedBy { task ->
-            // Convert DD-MM-YYYY to YYYY-MM-DD for proper sorting
-            val parts = task.dueDate.split("-")
-            if (parts.size == 3)
-                "${parts[2]}-${parts[1]}-${parts[0]}"
-            else task.dueDate
-        }
-
-        return if (order == SortOrder.DESCENDING) sorted.reversed() else sorted
-    }
-
-
-    // Toggle filter on/off
-    fun toggleFilter() {
-        _uiState.update { currentState ->
-            val active = !currentState.filterActive
-            currentState.copy(
-                filterActive = active,
-                tasks = if (active) {
-                    filterTasks(allTasks, currentState.showCompleted)
-                } else {
-                    allTasks
-                }
-            )
+    fun onUpdateTask(task: Task) {
+        viewModelScope.launch {
+            try {
+                updateTask(task)
+            } catch (e: Exception) {
+                _error.value = "Failed to update task: ${e.message}"
+            }
         }
     }
 
-
-    // Toggle which tasks to show when filter is active
-    fun toggleShowCompleted() {
-        _uiState.update { currentState ->
-            val newShowCompleted = !currentState.showCompleted
-            currentState.copy(
-                showCompleted = newShowCompleted,
-                tasks = if (currentState.filterActive) {
-                    filterTasks(allTasks, newShowCompleted)
-                } else {
-                    currentState.tasks
-                }
-            )
+    fun onDeleteTask(taskId: Int) {
+        viewModelScope.launch {
+            try {
+                deleteTask(taskId)
+            } catch (e: Exception) {
+                _error.value = "Failed to delete task: ${e.message}"
+            }
         }
     }
 
-    // Helper function to filter tasks by completion status
-    private fun filterTasks(tasks: List<Task>, showCompleted: Boolean): List<Task> =
-        tasks.filter { it.done == showCompleted }
-
-    fun toggleActions() {
-        _uiState.update {
-            it.copy(actionsExpanded = !it.actionsExpanded)
+    fun onToggleTaskCompletion(taskId: Int) {
+        viewModelScope.launch {
+            try {
+                toggleTaskCompletion(taskId)
+            } catch (e: Exception) {
+                _error.value = "Failed to toggle task: ${e.message}"
+            }
         }
     }
 
-
-    // Update displayed tasks based on current filter state
-    private fun updateDisplayedTasks() {
-        _uiState.update { currentState ->
-            currentState.copy(
-                tasks = if (currentState.filterActive) {
-                    filterTasks(allTasks, currentState.showCompleted)
-                } else {
-                    allTasks
-                }
-            )
+    suspend fun getNextTaskId(): Int {
+        return try {
+            generateTaskId()
+        } catch (e: Exception) {
+            _error.value = "Failed to generate ID: ${e.message}"
+            1
         }
+    }
+
+    fun onToggleSortOrder() {
+        _sorter.value = when (_sorter.value) {
+            is TaskSorter.ByDateAscending -> TaskSorter.ByDateDescending
+            is TaskSorter.ByDateDescending -> TaskSorter.ByDateAscending
+            else -> TaskSorter.ByDateAscending
+        }
+    }
+
+    fun onToggleFilter() {
+        _filter.value = when (_filter.value) {
+            is TaskFilter.ShowAll -> TaskFilter.ShowIncomplete
+            is TaskFilter.ShowIncomplete -> TaskFilter.ShowCompleted
+            is TaskFilter.ShowCompleted -> TaskFilter.ShowAll
+        }
+    }
+
+    fun onShowCompletedTasks() {
+        _filter.value = TaskFilter.ShowCompleted
+    }
+
+    fun onShowIncompleteTasks() {
+        _filter.value = TaskFilter.ShowIncomplete
+    }
+
+    fun onShowAllTasks() {
+        _filter.value = TaskFilter.ShowAll
+    }
+
+    fun onToggleActionsPanel() {
+        _actionsExpanded.value = !_actionsExpanded.value
+    }
+
+    fun onDismissError() {
+        _error.value = null
     }
 }
