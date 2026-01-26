@@ -8,10 +8,6 @@ import com.example.viewmodelkotlinapp.domain.TaskDataSource
 import com.example.viewmodelkotlinapp.domain.usecases.*
 import com.example.viewmodelkotlinapp.viewmodel.TaskViewModel
 
-/**
- * Factory Pattern + Dependency Injection
- * Creates ViewModel with all required dependencies
- */
 class TaskViewModelFactory : ViewModelProvider.Factory {
 
     @Suppress("UNCHECKED_CAST")
@@ -43,11 +39,3 @@ class TaskViewModelFactory : ViewModelProvider.Factory {
         throw IllegalArgumentException("Unknown ViewModel class")
     }
 }
-
-/**
- * Usage in composable:
- *
- * val viewModel: TaskViewModel = viewModel(
- *     factory = TaskViewModelFactory()
- * )
- */
