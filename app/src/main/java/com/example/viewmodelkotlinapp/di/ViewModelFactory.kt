@@ -8,17 +8,38 @@ import com.example.viewmodelkotlinapp.domain.TaskDataSource
 import com.example.viewmodelkotlinapp.domain.usecases.*
 import com.example.viewmodelkotlinapp.viewmodel.TaskViewModel
 
+// Uses singleton repository pattern to ensure
+// data consistency across Home and Calendar screens
 class TaskViewModelFactory : ViewModelProvider.Factory {
+
+    companion object {
+        // Singleton repository instance
+        @Volatile
+        private var repositoryInstance: TaskRepository? = null
+
+        private fun getRepository(): TaskRepository {
+            return repositoryInstance ?: synchronized(this) {
+                val instance = repositoryInstance
+                if (instance != null) {
+                    instance
+                } else {
+                    val newInstance = InMemoryTaskRepository(
+                        initialTasks = TaskDataSource.getInitialTasks()
+                    )
+                    repositoryInstance = newInstance
+                    newInstance
+                }
+            }
+        }
+    }
 
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(TaskViewModel::class.java)) {
-            // Create repository
-            val repository: TaskRepository = InMemoryTaskRepository(
-                initialTasks = TaskDataSource.getInitialTasks()
-            )
+            // Use singleton repository
+            val repository = getRepository()
 
-            // Create use cases
+            // Create use cases with shared repository
             val getFilteredAndSortedTasks = GetFilteredAndSortedTasksUseCase(repository)
             val addTask = AddTaskUseCase(repository)
             val updateTask = UpdateTaskUseCase(repository)

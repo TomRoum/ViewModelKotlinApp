@@ -6,15 +6,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.viewmodelkotlinapp.domain.Task
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
-/**
- * Add Task Dialog Component
- * AlertDialog for creating new tasks
- *
- * @param onDismiss Callback when dialog should be dismissed
- * @param onConfirm Callback when task should be added
- * @param preFilledDate Optional date to pre-fill (from calendar)
- */
+// Add Task Dialog Component
 @Composable
 fun AddTaskDialog(
     onDismiss: () -> Unit,
@@ -24,7 +19,13 @@ fun AddTaskDialog(
 ) {
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
-    var dueDate by remember { mutableStateOf(preFilledDate ?: "") }
+    var dueDate by remember {
+        mutableStateOf(
+            preFilledDate ?: LocalDate.now().format(
+                DateTimeFormatter.ofPattern("dd-MM-yyyy")
+            )
+        )
+    }
     var priority by remember { mutableStateOf(1) }
 
     AlertDialog(
@@ -61,14 +62,11 @@ fun AddTaskDialog(
                     maxLines = 4
                 )
 
-                // Due Date Field
-                OutlinedTextField(
-                    value = dueDate,
-                    onValueChange = { dueDate = it },
-                    label = { Text("Due Date") },
-                    placeholder = { Text("DD-MM-YYYY") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                // Date Picker Field
+                DatePickerField(
+                    selectedDate = dueDate,
+                    onDateSelected = { dueDate = it },
+                    label = "Due Date"
                 )
 
                 // Priority Selector
@@ -98,13 +96,13 @@ fun AddTaskDialog(
             FilledTonalButton(
                 onClick = {
                     if (title.isNotBlank()) {
-                        // Generate temporary ID (will be replaced by proper ID generation)
+                        // Generate temporary ID
                         val newTask = Task(
                             id = System.currentTimeMillis().toInt(),
                             title = title,
                             description = description,
                             priority = priority,
-                            dueDate = dueDate.ifBlank { "15-01-2026" },
+                            dueDate = dueDate,
                             done = false
                         )
                         onConfirm(newTask)

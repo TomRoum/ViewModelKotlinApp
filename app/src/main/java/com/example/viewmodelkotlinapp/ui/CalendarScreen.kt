@@ -20,6 +20,9 @@ import com.example.viewmodelkotlinapp.ui.components.AddTaskDialog
 import com.example.viewmodelkotlinapp.ui.components.CalendarDay
 import com.example.viewmodelkotlinapp.ui.components.EditTaskDialog
 import com.example.viewmodelkotlinapp.ui.components.TaskCard
+import com.example.viewmodelkotlinapp.ui.components.QuickNavigationBar
+import com.example.viewmodelkotlinapp.ui.components.findPreviousTaskDate
+import com.example.viewmodelkotlinapp.ui.components.findNextTaskDate
 import com.example.viewmodelkotlinapp.viewmodel.TaskViewModel
 import java.time.LocalDate
 import java.time.YearMonth
@@ -33,6 +36,7 @@ fun CalendarScreen(
     viewModel: TaskViewModel = viewModel(factory = TaskViewModelFactory())
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val taskDates by viewModel.getTaskDatesAsList().collectAsStateWithLifecycle()
 
     // Calendar state
     var currentMonth by remember { mutableStateOf(YearMonth.now()) }
@@ -138,6 +142,33 @@ fun CalendarScreen(
                 }
             }
 
+            // Quick Navigation Bar
+            QuickNavigationBar(
+                currentDate = selectedDate,
+                taskDates = taskDates,
+                onNavigateToPreviousTask = {
+                    selectedDate?.let { current ->
+                        findPreviousTaskDate(current, taskDates)?.let { prevDate ->
+                            selectedDate = prevDate
+                            currentMonth = YearMonth.of(prevDate.year, prevDate.month)
+                        }
+                    }
+                },
+                onNavigateToToday = {
+                    val today = LocalDate.now()
+                    selectedDate = today
+                    currentMonth = YearMonth.of(today.year, today.month)
+                },
+                onNavigateToNextTask = {
+                    selectedDate?.let { current ->
+                        findNextTaskDate(current, taskDates)?.let { nextDate ->
+                            selectedDate = nextDate
+                            currentMonth = YearMonth.of(nextDate.year, nextDate.month)
+                        }
+                    }
+                }
+            )
+
             // Calendar Grid
             CalendarGrid(
                 yearMonth = currentMonth,
@@ -197,6 +228,7 @@ fun CalendarScreen(
 }
 
 // Calendar Grid Component
+// Displays a month grid with day numbers
 @Composable
 fun CalendarGrid(
     yearMonth: YearMonth,

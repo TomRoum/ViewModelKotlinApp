@@ -12,14 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.viewmodelkotlinapp.domain.Task
 
-/**
- * Task Card Component
- * Displays a single task with clickable action
- *
- * @param task The task to display
- * @param onTaskClick Callback when task card is clicked (opens edit dialog)
- * @param onToggleDone Callback when done button is clicked
- */
+// Task Card Component
 @Composable
 fun TaskCard(
     task: Task,

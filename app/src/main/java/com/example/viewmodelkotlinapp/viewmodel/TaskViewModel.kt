@@ -178,13 +178,13 @@ class TaskViewModel(
         _taskToEdit.value = task
     }
 
-
     // Dismiss Edit Task dialog
     fun onDismissEditDialog() {
         _taskToEdit.value = null
     }
 
     // Get tasks grouped by date for calendar display
+    // Returns a map of date string to list of tasks
     fun getTasksByDate(): StateFlow<Map<String, List<Task>>> {
         return uiState.map { state ->
             state.tasks.groupBy { it.dueDate }
@@ -204,5 +204,38 @@ class TaskViewModel(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptySet()
         )
+    }
+
+    // Get sorted list of all task dates as LocalDate
+    // Used for quick navigation between tasks
+    fun getTaskDatesAsList(): StateFlow<List<java.time.LocalDate>> {
+        return uiState.map { state ->
+            state.tasks
+                .mapNotNull { task ->
+                    parseDateStringToLocalDate(task.dueDate)
+                }
+                .distinct()
+                .sorted()
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+    }
+
+    // Parse DD-MM-YYYY to LocalDate
+    private fun parseDateStringToLocalDate(dateString: String): java.time.LocalDate? {
+        return try {
+            val parts = dateString.split("-")
+            if (parts.size == 3) {
+                java.time.LocalDate.of(
+                    parts[2].toInt(),  // year
+                    parts[1].toInt(),  // month
+                    parts[0].toInt()   // day
+                )
+            } else null
+        } catch (e: Exception) {
+            null
+        }
     }
 }

@@ -9,15 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.viewmodelkotlinapp.domain.Task
 
-/**
- * Edit Task Dialog Component
- * AlertDialog for editing and deleting tasks
- *
- * @param task The task to edit
- * @param onDismiss Callback when dialog should be dismissed
- * @param onConfirm Callback when task changes should be saved
- * @param onDelete Callback when task should be deleted
- */
+// Edit Task Dialog Component
 @Composable
 fun EditTaskDialog(
     task: Task,
@@ -92,14 +84,11 @@ fun EditTaskDialog(
                     maxLines = 4
                 )
 
-                // Due Date Field
-                OutlinedTextField(
-                    value = dueDate,
-                    onValueChange = { dueDate = it },
-                    label = { Text("Due Date") },
-                    placeholder = { Text("DD-MM-YYYY") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                // Date Picker Field
+                DatePickerField(
+                    selectedDate = dueDate,
+                    onDateSelected = { dueDate = it },
+                    label = "Due Date"
                 )
 
                 // Priority Selector
