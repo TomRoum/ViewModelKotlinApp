@@ -26,6 +26,12 @@ class TaskViewModel(
     private val _actionsExpanded = MutableStateFlow(false)
     private val _error = MutableStateFlow<String?>(null)
 
+    // Dialog states
+    private val _showAddDialog = MutableStateFlow(false)
+    private val _taskToEdit = MutableStateFlow<Task?>(null)
+    private val _selectedDate = MutableStateFlow<String?>(null)
+
+    // Reactive task list that updates when filter/sorter changes
     private val filteredTasks: Flow<List<Task>> = combine(
         _filter,
         _sorter
@@ -44,14 +50,29 @@ class TaskViewModel(
         _filter,
         _sorter,
         _actionsExpanded,
-        _error
-    ) { tasks, filter, sorter, actionsExpanded, error ->
+        _error,
+        _showAddDialog,
+        _taskToEdit,
+        _selectedDate
+    ) { flows ->
+        val tasks = flows[0] as List<*>
+        val filter = flows[1] as TaskFilter
+        val sorter = flows[2] as TaskSorter
+        val actionsExpanded = flows[3] as Boolean
+        val error = flows[4] as String?
+        val showAddDialog = flows[5] as Boolean
+        val taskToEdit = flows[6] as Task?
+        val selectedDate = flows[7] as String?
+
         TaskUiState(
-            tasks = tasks,
+            tasks = tasks.filterIsInstance<Task>(),
             filter = filter,
             sorter = sorter,
             actionsExpanded = actionsExpanded,
-            error = error
+            error = error,
+            showAddDialog = showAddDialog,
+            taskToEdit = taskToEdit,
+            selectedDate = selectedDate
         )
     }.stateIn(
         scope = viewModelScope,
@@ -138,5 +159,50 @@ class TaskViewModel(
 
     fun onDismissError() {
         _error.value = null
+    }
+
+    // Show Add Task dialog
+    fun onShowAddDialog(preFilledDate: String? = null) {
+        _selectedDate.value = preFilledDate
+        _showAddDialog.value = true
+    }
+
+    // Dismiss Add Task dialog
+    fun onDismissAddDialog() {
+        _showAddDialog.value = false
+        _selectedDate.value = null
+    }
+
+    // Show Edit Task dialog
+    fun onShowEditDialog(task: Task) {
+        _taskToEdit.value = task
+    }
+
+
+    // Dismiss Edit Task dialog
+    fun onDismissEditDialog() {
+        _taskToEdit.value = null
+    }
+
+    // Get tasks grouped by date for calendar display
+    fun getTasksByDate(): StateFlow<Map<String, List<Task>>> {
+        return uiState.map { state ->
+            state.tasks.groupBy { it.dueDate }
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyMap()
+        )
+    }
+
+    // Get all unique dates that have tasks
+    fun getDatesWithTasks(): StateFlow<Set<String>> {
+        return uiState.map { state ->
+            state.tasks.map { it.dueDate }.toSet()
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptySet()
+        )
     }
 }

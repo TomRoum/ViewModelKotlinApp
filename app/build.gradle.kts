@@ -29,6 +29,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+        isCoreLibraryDesugaringEnabled = true
     }
     buildFeatures {
         compose = true
@@ -68,6 +69,9 @@ dependencies {
 
     // DataStore Preferences - For persistent theme storage
     implementation("androidx.datastore:datastore-preferences:1.0.0")
+
+    // Core Library Desugaring - For Java 8+ Time API on older Android versions
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 
     // Testing - EXISTING
     testImplementation(libs.junit)
