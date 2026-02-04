@@ -1,8 +1,8 @@
 # ViewModelKotlinApp
 
-A modern Task Manager Android app built with Jetpack Compose, 
-implementing Clean Architecture with VVM pattern, Repository Pattern, Use Cases, and Strategy Pattern. 
-This app demonstrates advanced state management using StateFlow, 
+A modern Task Manager Android app built with Jetpack Compose,
+implementing Clean Architecture with VVM pattern, Repository Pattern, Use Cases, and Strategy Pattern.
+This app demonstrates advanced state management using StateFlow,
 reactive data streams with Kotlin Flow, and comprehensive task management features.
 
 ---
@@ -14,6 +14,7 @@ reactive data streams with Kotlin Flow, and comprehensive task management featur
 - [Project Structure](#project-structure)
 - [Design Patterns](#design-patterns)
 - [State Management](#state-management)
+- [Navigation Architecture](#navigation-architecture)
 - [Why ViewModel?](#why-viewmodel)
 - [Getting Started](#getting-started)
 - [Dependencies](#dependencies)
@@ -88,9 +89,11 @@ com.example.viewmodelkotlinapp
 ├── MainActivity.kt                    # App entry point
 │
 ├── data/
+│   ├── SettingsRepository.kt          # Provides persistent storage for app settings
 │   └── TaskRepository.kt              # Repository interface & implementation
 │
 ├── di/
+│   ├── SettingsViewModelFactory.kt    # Ensures data consistency across screens
 │   └── ViewModelFactory.kt            # Factory pattern for dependency injection
 │
 ├── domain/
@@ -101,14 +104,31 @@ com.example.viewmodelkotlinapp
 │   └── usecases/
 │       └── TaskUseCases.kt            # Business logic use cases
 │
+├── navigation
+│   ├── BottomNavigationBar.kt         # Bar for navigation between screens
+│   ├── Screen.kt                      # Class definition for screens
+│   └── TaskNavigation.kt              # Screen routing
+│
 ├── ui/
+│   ├── CalendarScreen.kt              # UI screen with Calendar
 │   ├── HomeScreen.kt                  # Main UI screen with task list
+│   ├── SettingsScreen.kt              # UI screen with Settings
+│   ├── components
+│   │   ├── AddTaskDialog.kt           # Dialog for adding tasks
+│   │   ├── CalendarDay.kt             # Calendar fay
+│   │   ├── DatePickerField.kt         # Date picker field
+│   │   ├── EditTaskDialog.kt          # Dialog for editing tasks
+│   │   ├── MonthSummaryCard.kt        # Card that summarizes months
+│   │   ├── QuickNavigationBar.kt      # Bar that allow quick navigation
+│   │   └── TaskCard.kt                # Card that holds tasks
 │   └── theme/
 │       ├── Color.kt                   # Material 3 color palette
 │       ├── Theme.kt                   # App theme configuration
 │       └── Type.kt                    # Typography definitions
 │
 └── viewmodel/
+    ├── SettingsUiState.kt             # Settings preferences and UI state
+    ├── SettingsViewModel.kt           # ViewModel for Settings Screen
     ├── TaskViewModel.kt               # State management & UI logic
     └── TaskUiState.kt                 # Immutable UI state container
 ```
@@ -287,6 +307,722 @@ StateFlow emits: Updated TaskUiState
     ↓
 UI recomposes: New task appears automatically
 ```
+
+---
+
+## Navigation Architecture
+
+### Navigation in Jetpack Compose
+
+**Navigation** in Jetpack Compose is the framework for moving between different screens (composables) in an Android app. Unlike traditional XML-based navigation, Compose Navigation is fully declarative and type-safe, allowing you to define navigation routes and transitions entirely in Kotlin code.
+
+**Key Concepts**:
+- **Declarative**: You describe what screens exist and how they connect, not how to navigate step-by-step
+- **Composable-based**: Each screen is a `@Composable` function
+- **Type-safe**: Routes are defined as strings or objects, reducing runtime errors
+- **Lifecycle-aware**: Automatically handles Android lifecycle events
+
+---
+
+### NavHost and NavController
+
+#### NavController
+
+**NavController** is the central component that manages navigation. It keeps track of the back stack (history of screens) and provides methods to navigate between destinations.
+
+**Key Responsibilities**:
+- Tracks current screen location
+- Manages navigation back stack
+- Handles navigation actions (navigate, popBackStack)
+- Saves and restores navigation state
+
+**Example**:
+```kotlin
+val navController = rememberNavController()
+navController.navigate("calendar")  // Navigate to calendar screen
+navController.popBackStack()        // Go back
+```
+
+#### NavHost
+
+**NavHost** is a composable container that displays the current screen based on the navigation state. It defines all possible navigation destinations and their corresponding composables.
+
+**Key Responsibilities**:
+- Hosts all navigation destinations
+- Renders the current screen
+- Provides navigation context to child composables
+
+**Example**:
+```kotlin
+NavHost(
+    navController = navController,
+    startDestination = "home"
+) {
+    composable("home") { HomeScreen() }
+    composable("calendar") { CalendarScreen() }
+    composable("settings") { SettingsScreen() }
+}
+```
+
+---
+
+### Application Navigation Structure
+
+#### Implementation: Home ↔ Calendar ↔ Settings
+
+Our app uses **Bottom Navigation** pattern with three main screens:
+
+```
+┌─────────────────────────────────────┐
+│         MainActivity                │
+│  ┌───────────────────────────────┐  │
+│  │     TaskApp (NavHost)         │  │
+│  │  ┌─────────────────────────┐  │  │
+│  │  │  Current Screen         │  │  │
+│  │  │  - HomeScreen           │  │  │
+│  │  │  - CalendarScreen       │  │  │
+│  │  │  - SettingsScreen       │  │  │
+│  │  └─────────────────────────┘  │  │
+│  │  ┌─────────────────────────┐  │  │
+│  │  │  BottomNavigationBar    │  │  │
+│  │  │  [Home][Calendar][Set]  │  │  │
+│  │  └─────────────────────────┘  │  │
+│  └───────────────────────────────┘  │
+└─────────────────────────────────────┘
+```
+
+#### Screen Routes Definition
+
+```kotlin
+// navigation/Screen.kt
+sealed class Screen(
+    val route: String,
+    val title: String,
+    val icon: ImageVector
+) {
+    object Home : Screen("home", "Tasks", Icons.Default.Home)
+    object Calendar : Screen("calendar", "Calendar", Icons.Default.CalendarToday)
+    object Settings : Screen("settings", "Settings", Icons.Default.Settings)
+}
+```
+
+#### Navigation Setup
+
+```kotlin
+// navigation/TaskNavigation.kt
+@Composable
+fun TaskApp(navController: NavHostController = rememberNavController()) {
+    Scaffold(
+        bottomBar = { BottomNavigationBar(navController) }
+    ) { padding ->
+        NavHost(
+            navController = navController,
+            startDestination = Screen.Home.route,
+            modifier = Modifier.padding(padding)
+        ) {
+            composable(Screen.Home.route) { HomeScreen() }
+            composable(Screen.Calendar.route) { CalendarScreen() }
+            composable(Screen.Settings.route) { SettingsScreen() }
+        }
+    }
+}
+```
+
+#### Bottom Navigation Bar
+
+```kotlin
+// navigation/BottomNavigationBar.kt
+@Composable
+fun BottomNavigationBar(navController: NavHostController) {
+    val currentDestination = navController.currentBackStackEntryAsState()
+    
+    NavigationBar {
+        Screen.screens.forEach { screen ->
+            NavigationBarItem(
+                selected = currentDestination?.destination?.route == screen.route,
+                onClick = { navController.navigate(screen.route) },
+                icon = { Icon(screen.icon, contentDescription = screen.title) },
+                label = { Text(screen.title) }
+            )
+        }
+    }
+}
+```
+
+**How Navigation Works**:
+1. User taps "Calendar" in bottom navigation
+2. `navController.navigate("calendar")` is called
+3. NavHost detects route change
+4. CalendarScreen composable is rendered
+5. HomeScreen is saved in back stack
+6. Bottom navigation updates selection indicator
+
+---
+
+### MVVM with Navigation
+
+#### Combining MVVM and Navigation
+
+Our app uses **Activity-scoped ViewModels**, meaning the same ViewModel instance is shared across all screens within the navigation graph.
+
+```
+┌─────────────────────────────────────┐
+│       ViewModelFactory              │
+│  (Singleton Repository Pattern)     │
+└───────────────┬─────────────────────┘
+                │
+                ↓
+┌─────────────────────────────────────┐
+│      TaskRepository (Singleton)     │
+│  - Single source of truth           │
+│  - MutableStateFlow<List<Task>>     │
+└───────────────┬─────────────────────┘
+                │
+                ↓
+┌─────────────────────────────────────┐
+│    TaskViewModel (Activity-scoped)  │
+│  - uiState: StateFlow<TaskUiState>  │
+│  - Shared between all screens       │
+└───────┬───────────┬─────────────────┘
+        │           │
+        ↓           ↓
+┌─────────────┐ ┌─────────────┐
+│ HomeScreen  │ │CalendarScr  │
+│ - Collects  │ │ - Collects  │
+│   uiState   │ │   uiState   │
+└─────────────┘ └─────────────┘
+```
+
+#### One ViewModel for Multiple Screens
+
+**Key Implementation**:
+
+```kotlin
+// HomeScreen.kt
+@Composable
+fun HomeScreen(
+    viewModel: TaskViewModel = viewModel(factory = TaskViewModelFactory())
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // Use uiState.tasks
+}
+
+// CalendarScreen.kt
+@Composable
+fun CalendarScreen(
+    viewModel: TaskViewModel = viewModel(factory = TaskViewModelFactory())
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // Use same uiState.tasks
+}
+```
+
+**Why This Works**:
+1. `viewModel()` is scoped to the **Activity** by default
+2. First call creates the ViewModel
+3. Subsequent calls return the **same instance**
+4. Both screens observe the **same StateFlow**
+5. State changes are reflected in **both screens**
+
+#### Shared State Between Screens
+
+**State Sharing Mechanism**:
+
+```kotlin
+class TaskViewModel(...) : ViewModel() {
+    // Single StateFlow shared by all screens
+    val uiState: StateFlow<TaskUiState> = combine(
+        filteredTasks,
+        _filter,
+        _sorter,
+        _actionsExpanded,
+        _error,
+        _showAddDialog,
+        _taskToEdit,
+        _selectedDate
+    ) { ... }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = TaskUiState()
+        )
+}
+```
+
+**Data Flow Example**:
+```
+1. User adds task on CalendarScreen
+   ↓
+2. viewModel.onAddTask(task) called
+   ↓
+3. Repository updates MutableStateFlow
+   ↓
+4. TaskViewModel.uiState emits new state
+   ↓
+5. Both HomeScreen AND CalendarScreen receive update
+   ↓
+6. Both screens recompose with new task visible
+```
+
+**Benefits**:
+- **Single source of truth** - One repository, one ViewModel
+- **Automatic synchronization** - Changes appear on all screens
+- **State persistence** - Survives configuration changes
+- **No manual sync** - Reactive architecture handles updates
+
+---
+
+### CalendarScreen Implementation
+
+#### Calendar Structure
+
+CalendarScreen uses a **single scrollable container** (LazyColumn) to display:
+1. Month navigation header
+2. Quick navigation buttons
+3. Calendar grid
+4. Month summary or selected date tasks
+
+#### Task Grouping by Date
+
+**Date-based Task Organization**:
+
+```kotlin
+// Group tasks by due date
+val tasksByDate: Map<String, List<Task>> = tasks.groupBy { it.dueDate }
+
+// Example:
+// {
+//   "04-02-2026" -> [Task1, Task2, Task3],
+//   "05-02-2026" -> [Task1],
+//   "10-02-2026" -> [Task1, Task2]
+// }
+```
+
+#### Calendar Grid Generation
+
+**Dynamic Calendar Creation**:
+
+```kotlin
+val yearMonth = YearMonth.of(currentYear, currentMonth)
+val daysInMonth = yearMonth.lengthOfMonth()
+val firstDayOfWeek = yearMonth.atDay(1).dayOfWeek.value % 7
+
+// Generate calendar grid
+LazyVerticalGrid(columns = GridCells.Fixed(7)) {
+    // Empty cells for offset
+    items(firstDayOfWeek) { Spacer() }
+    
+    // Days of month
+    items(daysInMonth) { day ->
+        val dateString = formatDate(day, currentMonth, currentYear)
+        val tasksOnDay = tasksByDate[dateString]?.size ?: 0
+        
+        CalendarDayCell(
+            day = day,
+            taskCount = tasksOnDay,
+            isSelected = dateString == selectedDate,
+            onClick = { onDateSelected(dateString) }
+        )
+    }
+}
+```
+
+#### Task Indicators
+
+**Visual Task Presence**:
+
+```kotlin
+@Composable
+fun CalendarDayCell(
+    day: Int,
+    taskCount: Int,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .aspectRatio(1f)
+            .background(if (isSelected) Color.Blue else Color.Transparent)
+            .clickable(onClick = onClick)
+    ) {
+        Text(text = day.toString())
+        
+        // Task indicator dots
+        if (taskCount > 0) {
+            Row {
+                repeat(min(taskCount, 3)) {
+                    Box(
+                        modifier = Modifier
+                            .size(4.dp)
+                            .background(Color.Red, CircleShape)
+                    )
+                }
+            }
+        }
+    }
+}
+```
+
+#### Display Modes
+
+**Three Calendar Views**:
+
+1. **Month Summary** (no date selected):
+```kotlin
+if (selectedDate == null) {
+    Text("Tasks this month: ${tasksByDate.values.flatten().size}")
+    // Show statistics or overview
+}
+```
+
+2. **Selected Date Tasks**:
+```kotlin
+selectedDate?.let { date ->
+    val tasksOnDate = tasksByDate[date] ?: emptyList()
+    
+    if (tasksOnDate.isEmpty()) {
+        Text("No tasks on this day")
+    } else {
+        tasksOnDate.forEach { task ->
+            TaskCard(task, onEdit = { ... })
+        }
+    }
+}
+```
+
+3. **Empty State**:
+```kotlin
+if (tasks.isEmpty()) {
+    Text("No tasks in calendar")
+    Text("Add a task to get started")
+}
+```
+
+#### Quick Navigation Features
+
+**Navigation Helpers**:
+
+```kotlin
+// Jump to today
+Button(onClick = {
+    val today = LocalDate.now()
+    currentMonth = today.monthValue
+    currentYear = today.year
+    selectedDate = formatDate(today)
+}) {
+    Text("Today")
+}
+
+// Navigate to next task
+Button(
+    onClick = {
+        val nextTaskDate = tasks
+            .filter { it.dueDate > currentDate }
+            .minByOrNull { it.dueDate }
+        nextTaskDate?.let { navigateToDate(it.dueDate) }
+    },
+    enabled = hasUpcomingTasks
+) {
+    Text("Next Task")
+}
+```
+
+---
+
+### Dialog-Based Task Management
+
+#### Dialog vs Navigation
+
+Our app uses **AlertDialog** (not navigation) for add/edit operations, keeping these as modal overlays rather than separate screens.
+
+**Why AlertDialog instead of Navigation**:
+
+1. **Modal Context** - User stays in same screen context
+2. **Lighter Weight** - No full screen navigation overhead
+3. **Better UX** - Can see background (calendar/list) while editing
+4. **State Simplicity** - Dialog state in ViewModel, not navigation
+5. **Reusability** - Same dialog works from any screen
+
+#### Dialog State Management
+
+**ViewModel Dialog State**:
+```kotlin
+data class TaskUiState(
+    val tasks: List<Task>,
+    val showAddDialog: Boolean = false,        // Add dialog visibility
+    val taskToEdit: Task? = null,              // Edit dialog (null = hidden)
+    val selectedDate: String? = null           // Pre-filled date from calendar
+)
+```
+
+**Dialog Control Functions**:
+```kotlin
+class TaskViewModel {
+    fun onShowAddDialog(preFilledDate: String? = null) {
+        _selectedDate.value = preFilledDate
+        _showAddDialog.value = true
+    }
+    
+    fun onDismissAddDialog() {
+        _showAddDialog.value = false
+        _selectedDate.value = null
+    }
+    
+    fun onShowEditDialog(task: Task) {
+        _taskToEdit.value = task
+    }
+    
+    fun onDismissEditDialog() {
+        _taskToEdit.value = null
+    }
+}
+```
+
+#### AddTask Dialog Implementation
+
+```kotlin
+// In HomeScreen.kt and CalendarScreen.kt
+if (uiState.showAddDialog) {
+    AddTaskDialog(
+        onDismiss = { viewModel.onDismissAddDialog() },
+        onConfirm = { task ->
+            viewModel.onAddTask(task)
+            viewModel.onDismissAddDialog()
+        },
+        preFilledDate = uiState.selectedDate  // From calendar selection
+    )
+}
+```
+
+**AddTaskDialog Component**:
+```kotlin
+@Composable
+fun AddTaskDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (Task) -> Unit,
+    preFilledDate: String? = null
+) {
+    var title by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var dueDate by remember { mutableStateOf(preFilledDate ?: today()) }
+    var priority by remember { mutableStateOf(1) }
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add New Task") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Title") }
+                )
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Description") }
+                )
+                DatePickerField(
+                    selectedDate = dueDate,
+                    onDateChange = { dueDate = it }
+                )
+                PrioritySelector(
+                    priority = priority,
+                    onPriorityChange = { priority = it }
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val newTask = Task(
+                        id = generateId(),
+                        title = title,
+                        description = description,
+                        dueDate = dueDate,
+                        priority = priority,
+                        done = false
+                    )
+                    onConfirm(newTask)
+                },
+                enabled = title.isNotBlank()
+            ) {
+                Text("Add Task")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+```
+
+#### EditTask Dialog Implementation
+
+```kotlin
+// In screens
+uiState.taskToEdit?.let { task ->
+    EditTaskDialog(
+        task = task,
+        onDismiss = { viewModel.onDismissEditDialog() },
+        onConfirm = { updatedTask ->
+            viewModel.onUpdateTask(updatedTask)
+            viewModel.onDismissEditDialog()
+        },
+        onDelete = { taskId ->
+            viewModel.onDeleteTask(taskId)
+            viewModel.onDismissEditDialog()
+        }
+    )
+}
+```
+
+**EditTaskDialog Component**:
+```kotlin
+@Composable
+fun EditTaskDialog(
+    task: Task,
+    onDismiss: () -> Unit,
+    onConfirm: (Task) -> Unit,
+    onDelete: (Int) -> Unit
+) {
+    // Pre-fill with existing task data
+    var title by remember(task) { mutableStateOf(task.title) }
+    var description by remember(task) { mutableStateOf(task.description) }
+    var dueDate by remember(task) { mutableStateOf(task.dueDate) }
+    var priority by remember(task) { mutableStateOf(task.priority) }
+    var isDone by remember(task) { mutableStateOf(task.done) }
+    
+    var showDeleteConfirmation by remember { mutableStateOf(false) }
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Task") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Title") }
+                )
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Description") }
+                )
+                DatePickerField(
+                    selectedDate = dueDate,
+                    onDateChange = { dueDate = it }
+                )
+                PrioritySelector(
+                    priority = priority,
+                    onPriorityChange = { priority = it }
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Completed")
+                    Switch(
+                        checked = isDone,
+                        onCheckedChange = { isDone = it }
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Row {
+                OutlinedButton(
+                    onClick = { showDeleteConfirmation = true },
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Icon(Icons.Default.Delete, contentDescription = "Delete")
+                    Spacer(Modifier.width(4.dp))
+                    Text("Delete")
+                }
+                
+                Spacer(Modifier.width(8.dp))
+                
+                Button(
+                    onClick = {
+                        val updatedTask = task.copy(
+                            title = title,
+                            description = description,
+                            dueDate = dueDate,
+                            priority = priority,
+                            done = isDone
+                        )
+                        onConfirm(updatedTask)
+                    },
+                    enabled = title.isNotBlank()
+                ) {
+                    Text("Save")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+    
+    // Delete confirmation dialog
+    if (showDeleteConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmation = false },
+            title = { Text("Delete Task?") },
+            text = { Text("This action cannot be undone.") },
+            confirmButton = {
+                Button(
+                    onClick = { onDelete(task.id) },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmation = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+```
+
+#### Dialog Lifecycle
+
+**Complete Flow**:
+```
+1. User clicks FAB or task card
+   ↓
+2. ViewModel sets dialog state (showAddDialog = true)
+   ↓
+3. Screen recomposes, shows AlertDialog
+   ↓
+4. User fills form and clicks "Add" or "Save"
+   ↓
+5. onConfirm callback triggers ViewModel action
+   ↓
+6. ViewModel updates repository
+   ↓
+7. Repository emits new state via Flow
+   ↓
+8. Dialog dismissed (showAddDialog = false)
+   ↓
+9. Both HomeScreen and CalendarScreen recompose with new/updated task
+```
+
+**Key Advantages**:
+- **Shared across screens** - Same dialog code works on Home and Calendar
+- **Pre-filled data** - Calendar can pass selected date to dialog
+- **Confirmation dialogs** - Nested dialogs for destructive actions
+- **Reactive updates** - Changes reflect immediately on all screens
+- **Clean state management** - Dialog visibility controlled by ViewModel
 
 ---
 
