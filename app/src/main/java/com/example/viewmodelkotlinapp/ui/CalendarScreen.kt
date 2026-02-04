@@ -23,6 +23,7 @@ import com.example.viewmodelkotlinapp.ui.components.TaskCard
 import com.example.viewmodelkotlinapp.ui.components.QuickNavigationBar
 import com.example.viewmodelkotlinapp.ui.components.findPreviousTaskDate
 import com.example.viewmodelkotlinapp.ui.components.findNextTaskDate
+import com.example.viewmodelkotlinapp.ui.components.MonthSummaryCard
 import com.example.viewmodelkotlinapp.viewmodel.TaskViewModel
 import java.time.LocalDate
 import java.time.YearMonth
@@ -41,6 +42,16 @@ fun CalendarScreen(
     // Calendar state
     var currentMonth by remember { mutableStateOf(YearMonth.now()) }
     var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
+
+    // Clear selected date when navigating to a different month
+    // This prevents showing stale date info when user changes months
+    LaunchedEffect(currentMonth) {
+        selectedDate?.let { date ->
+            if (YearMonth.from(date) != currentMonth) {
+                selectedDate = null  // Clear selection
+            }
+        }
+    }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -106,122 +117,181 @@ fun CalendarScreen(
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
-        Column(
+
+        // Get tasks for selected date
+        val tasksForDate = selectedDate?.let { date ->
+            val dateString = DateTimeFormatter.ofPattern("dd-MM-yyyy").format(date)
+            uiState.tasks.filter { it.dueDate == dateString }
+        } ?: emptyList()
+
+        // All content in one LazyColumn
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(vertical = 16.dp)
         ) {
             // Month Navigation Header
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
-                    IconButton(onClick = { currentMonth = currentMonth.minusMonths(1) }) {
-                        Icon(Icons.Default.ChevronLeft, contentDescription = "Previous month")
-                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = { currentMonth = currentMonth.minusMonths(1) }) {
+                            Icon(Icons.Default.ChevronLeft, contentDescription = "Previous month")
+                        }
 
-                    Text(
-                        text = currentMonth.format(DateTimeFormatter.ofPattern("MMMM yyyy")),
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.weight(1f),
-                        textAlign = TextAlign.Center
-                    )
+                        Text(
+                            text = currentMonth.format(DateTimeFormatter.ofPattern("MMMM yyyy")),
+                            style = MaterialTheme.typography.titleLarge,
+                            modifier = Modifier.weight(1f),
+                            textAlign = TextAlign.Center
+                        )
 
-                    IconButton(onClick = { currentMonth = currentMonth.plusMonths(1) }) {
-                        Icon(Icons.Default.ChevronRight, contentDescription = "Next month")
+                        IconButton(onClick = { currentMonth = currentMonth.plusMonths(1) }) {
+                            Icon(Icons.Default.ChevronRight, contentDescription = "Next month")
+                        }
                     }
                 }
             }
 
             // Quick Navigation Bar
-            QuickNavigationBar(
-                currentDate = selectedDate,
-                taskDates = taskDates,
-                onNavigateToPreviousTask = {
-                    selectedDate?.let { current ->
-                        findPreviousTaskDate(current, taskDates)?.let { prevDate ->
-                            selectedDate = prevDate
-                            currentMonth = YearMonth.of(prevDate.year, prevDate.month)
+            item {
+                QuickNavigationBar(
+                    currentDate = selectedDate,
+                    taskDates = taskDates,
+                    onNavigateToPreviousTask = {
+                        selectedDate?.let { current ->
+                            findPreviousTaskDate(current, taskDates)?.let { prevDate ->
+                                selectedDate = prevDate
+                                currentMonth = YearMonth.of(prevDate.year, prevDate.month)
+                            }
+                        }
+                    },
+                    onNavigateToToday = {
+                        val today = LocalDate.now()
+                        selectedDate = today
+                        currentMonth = YearMonth.of(today.year, today.month)
+                    },
+                    onNavigateToNextTask = {
+                        selectedDate?.let { current ->
+                            findNextTaskDate(current, taskDates)?.let { nextDate ->
+                                selectedDate = nextDate
+                                currentMonth = YearMonth.of(nextDate.year, nextDate.month)
+                            }
                         }
                     }
-                },
-                onNavigateToToday = {
-                    val today = LocalDate.now()
-                    selectedDate = today
-                    currentMonth = YearMonth.of(today.year, today.month)
-                },
-                onNavigateToNextTask = {
-                    selectedDate?.let { current ->
-                        findNextTaskDate(current, taskDates)?.let { nextDate ->
-                            selectedDate = nextDate
-                            currentMonth = YearMonth.of(nextDate.year, nextDate.month)
-                        }
-                    }
-                }
-            )
+                )
+            }
 
             // Calendar Grid
-            CalendarGrid(
-                yearMonth = currentMonth,
-                selectedDate = selectedDate,
-                tasksMap = uiState.tasks.groupBy { it.dueDate },
-                onDateSelected = { date -> selectedDate = date }
-            )
+            item {
+                CalendarGrid(
+                    yearMonth = currentMonth,
+                    selectedDate = selectedDate,
+                    tasksMap = uiState.tasks.groupBy { it.dueDate },
+                    onDateSelected = { date -> selectedDate = date }
+                )
+            }
 
-            // Selected Date Tasks
-            selectedDate?.let { date ->
-                val dateString = DateTimeFormatter.ofPattern("dd-MM-yyyy").format(date)
-                val tasksForDate = uiState.tasks.filter { it.dueDate == dateString }
-
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = "Tasks for ${DateTimeFormatter.ofPattern("MMM dd, yyyy").format(date)}",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.primary
+            // ShowMonth Summary OR Selected Date Tasks
+            val currentSelectedDate = selectedDate  // Create stable reference for smart cast
+            if (currentSelectedDate == null) {
+                // Month Summary
+                item {
+                    MonthSummaryCard(
+                        yearMonth = currentMonth,
+                        tasks = uiState.tasks
+                    )
+                }
+            } else {
+                // Tasks Section Header
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
                         )
-
-                        if (tasksForDate.isEmpty()) {
-                            Text(
-                                text = "No tasks for this day",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(vertical = 8.dp)
-                            )
-                        } else {
-                            LazyColumn(
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.heightIn(max = 300.dp)
-                            ) {
-                                items(
-                                    items = tasksForDate,
-                                    key = { it.id }
-                                ) { task ->
-                                    TaskCard(
-                                        task = task,
-                                        onTaskClick = { viewModel.onShowEditDialog(task) },
-                                        onToggleDone = { viewModel.onToggleTaskCompletion(task.id) }
-                                    )
-                                }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = currentSelectedDate.format(DateTimeFormatter.ofPattern("MMMM dd, yyyy")),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                Text(
+                                    text = "${tasksForDate.size} ${if (tasksForDate.size == 1) "task" else "tasks"}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
                             }
                         }
                     }
                 }
+
+                // Individual Task Items
+                if (tasksForDate.isNotEmpty()) {
+                    items(
+                        items = tasksForDate,
+                        key = { it.id }
+                    ) { task ->
+                        TaskCard(
+                            task = task,
+                            onTaskClick = { viewModel.onShowEditDialog(task) },
+                            onToggleDone = { viewModel.onToggleTaskCompletion(task.id) }
+                        )
+                    }
+                } else {
+                    // Empty State
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(32.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "No tasks for this day",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "Tap the + button to add a task",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Bottom Padding
+            item {
+                Spacer(modifier = Modifier.height(80.dp))
             }
         }
     }
@@ -238,8 +308,7 @@ fun CalendarGrid(
     modifier: Modifier = Modifier
 ) {
     val firstDayOfMonth = yearMonth.atDay(1)
-    val lastDayOfMonth = yearMonth.atEndOfMonth()
-    val firstDayOfWeek = firstDayOfMonth.dayOfWeek.value % 7 // Convert to 0=Sunday
+    val firstDayOfWeek = firstDayOfMonth.dayOfWeek.value % 7
     val daysInMonth = yearMonth.lengthOfMonth()
 
     Card(
@@ -292,7 +361,6 @@ fun CalendarGrid(
                                 )
                                 dayCounter++
                             } else {
-                                // Empty cell for days outside current month
                                 Box(modifier = Modifier.weight(1f).aspectRatio(1f))
                             }
                         }
