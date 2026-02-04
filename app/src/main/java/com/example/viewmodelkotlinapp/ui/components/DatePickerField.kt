@@ -10,16 +10,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
-/**
- * Date Picker Field Component
- * Provides Material 3 DatePicker for selecting dates
- * Always uses DD-MM-YYYY format
- *
- * @param selectedDate Current date in DD-MM-YYYY format
- * @param onDateSelected Callback when date is selected (DD-MM-YYYY format)
- * @param label Field label
- * @param modifier Optional modifier
- */
+// Date Picker Field Component
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DatePickerField(
